@@ -43,21 +43,25 @@ int main(){
 		perror("\nbind!: "); return 1;
 	}
 	listen(lsnr,1);
-	if((sock=accept(lsnr,NULL,NULL))<0){
-		perror("\naccept!: "); return 1;
+	while(1){
+		if((sock=accept(lsnr,NULL,NULL))<0){
+			perror("\naccept!: "); return 1;
+		}
+		recv(sock,recv_str,sizeof(recv_str),0);//IdA,EKA(r1, IdB) -> EKA(f(r1), Ks, IdB, EKB(Ks, IdA))
+		strcpy((char*)dc_str,(char*)decypher_str(recv_str+3,strlen((char*)recv_str)-3));//skip IDa as we know that thic is a lsc.cpp ("l2c");
+		unsigned char r1=dc_str[0]; r1++;//f(r1)=r1++;
+		unsigned char Ks=rand()%10+'0';
+		unsigned char IDa[4],IDb[4],tmpstr[BUFFSZ];
+		strcpy((char*)IDa,(char*)recv_str); strcpy((char*)IDb,(char*)(dc_str+1)); IDa[3]='\0';
+		sprintf((char*)tmpstr,"%c%s",Ks,IDa);
+		sprintf((char*)send_str,"%c%c%s%s",r1,Ks,IDb,cypher_str(tmpstr));
+		cout<<"\nIDa="<<IDa<<" IDb="<<IDb<<" r1="<<r1<<" Ks="<<Ks<<" tmpstr="<<tmpstr<<" send_str="<<send_str<<'\n';
+		send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
+		close(sock);
+		char choice='0';
+		cout<<"\nfor exit press 'q'"; cin>>choice;
+		if(choice=='q'){
+			close(lsnr); return 0;
+		}
 	}
-	recv(sock,recv_str,sizeof(recv_str),0);//IdA,EKA(r1, IdB) -> EKA(f(r1), Ks, IdB, EKB(Ks, IdA))
-	strcpy((char*)dc_str,(char*)decypher_str(recv_str+3,strlen((char*)recv_str)-3));//skip IDa as we know that thic is a lsc.cpp ("l2c");
-	unsigned char r1=dc_str[0]; r1++;//f(r1)=r1++;
-	unsigned char Ks=rand()%10+'0';
-	unsigned char IDa[4],IDb[4],tmpstr[BUFFSZ];
-	strcpy((char*)IDa,(char*)recv_str); strcpy((char*)IDb,(char*)(dc_str+1)); IDa[3]='\0';
-	sprintf((char*)tmpstr,"%c%s",Ks,IDa);
-	sprintf((char*)send_str,"%c%c%s%s",r1,Ks,IDb,cypher_str(tmpstr));
-	cout<<"\nIDa="<<IDa<<" IDb="<<IDb<<" r1="<<r1<<" Ks="<<Ks<<" tmpstr="<<tmpstr<<" send_str="<<send_str<<'\n';
-	send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
-	close(sock);
-	close(lsnr);
-
-
 }

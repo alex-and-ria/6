@@ -6,8 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
-#define shft 1
+#define shft_default 1
 #define dhg 2
 #define	dhp 5
 #define dhb 3
@@ -67,11 +66,11 @@ struct u_admin{
 struct u_user{
 	unsigned char login[BUFFSZ];
 	unsigned int pw_hash;
-	usi n_enters;
 	bool accsfl;
+	bool is_new_u;
 };
 
-unsigned char* cypher_str(unsigned char* str){
+unsigned char* cypher_str(unsigned char* str,usi shft=shft_default){
 	usi str_len=strlen((char*)str);
 	for(usi i=0;i<str_len;i++){
 		str[i]=(((usi)((usi)str[i])+shft)%256);
@@ -79,7 +78,7 @@ unsigned char* cypher_str(unsigned char* str){
 	return str;
 }
 
-unsigned char* decypher_str(unsigned char* str, unsigned int str_len){
+unsigned char* decypher_str(unsigned char* str, unsigned int str_len,usi shft=shft_default){
 	for(usi i=0;i<str_len;i++){
 		str[i]=((usi)((usi)str[i]+(256-shft))%256);
 	}
@@ -91,6 +90,7 @@ usi calc_pw_hash(unsigned char* str){
 	for(usi i=0;i<strlen((char*)str);i++){
 		calc_val+=(usi)str[i];
 	}
+	return calc_val;
 }
 
 bool udp_rqst(int& sock,int& reusefl,struct sockaddr_in& addr,struct sockaddr_in& recv_addr){
@@ -176,31 +176,104 @@ int main(){
 	else{
 		cout<<"\ncrc!";
 	}
-	usi Ks=1;
-	//recv(sock)
-	/*recv(sock,recv_str,sizeof(recv_str),0);//EKB(Ks, IdA), EKs(r2) -> EKs(f(r2));
-	unsigned char Ks=((decypher_str(recv_str,strlen((char*)recv_str)-1))[0]), fr2=((recv_str[strlen((char*)recv_str)-1]+(256-Ks))%256)+1;
-	sprintf((char*)send_str,"%c",(fr2+Ks+0)%256);
-	cout<<"\nfr2="<<fr2<<" send_str="<<send_str<<'\n';
-	send(sock,send_str,(strlen((char*)send_str)+1),0);*/
 	
-	u_admin admin; admin.login="admin"; admin.pw_hash=calc_pw_hash("1111");
-	for(usi i=0;i<3;i++){
-		recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
-		if(admin.pw_hash==calc_pw_hash(recv_str)){
-			strcpy((char*)send_str,"ack");
-			send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
-			break;
-		}
-		else{
-			if(i==2){
-				close(sock);
-				return 0;
+	u_admin admin; strcpy((char*)admin.login,"admin"); admin.pw_hash=calc_pw_hash((unsigned char*)"1111");
+	u_user users[BUFFSZ]; usi n_users=0; 
+	recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str));
+	if(strcmp((char*)recv_str,"0")==0){
+		/*
+		recv(sock,recv_str,sizeof(recv_str),0);//EKB(Ks, IdA), EKs(r2) -> EKs(f(r2));
+		unsigned char Ks=((decypher_str(recv_str,strlen((char*)recv_str)-1))[0]), fr2=((recv_str[strlen((char*)recv_str)-1]+(256-Ks))%256)+1;
+		sprintf((char*)send_str,"%c",(fr2+Ks+0)%256);
+		cout<<"\nfr2="<<fr2<<" send_str="<<send_str<<'\n';
+		send(sock,send_str,(strlen((char*)send_str)+1),0);
+		*/
+	
+		usi Ks=1;
+		while(1){
+			for(usi i=0;i<3;i++){
+				recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks); cout<<" recv_str="<<recv_str;
+				if(admin.pw_hash==calc_pw_hash(recv_str)){
+					strcpy((char*)send_str,"ack"); cout<<"\np send_str="<<send_str;
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0); cout<<"\np send_str="<<send_str;
+					break;
+				}
+				else{
+					if(i==2){
+						close(sock);
+						return 0;
+					}
+					strcpy((char*)send_str,"q"); cout<<" _ recv_str="<<recv_str<<" p send_str="<<send_str;
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				}
 			}
-			strcpy((char*)send_str,"q");
-			send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+			cout<<"\nHello, admin\n";
+			recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+			if(strcmp((char*)recv_str,"0")==0){//change admin's password;
+				recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+				if(admin.pw_hash==calc_pw_hash(recv_str)){//login;
+					cout<<"\nlog_in";
+					strcpy((char*)send_str,"ack");
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+					recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+					if(recv_str[0]=='0'){
+						cout<<"\nrecv_str[0]=='0'";
+						recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+						admin.pw_hash=calc_pw_hash(recv_str); cout<<"\nadmin.pw_hash="<<admin.pw_hash;
+					}
+					else{
+						cout<<"\n!(recv_str[0]=='0')";
+					}
+				}
+				else{
+					strcpy((char*)send_str,"q"); cout<<"\n!(log_in)";
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				}
+			}
+			else if(strcmp((char*)recv_str,"1")==0){//add new user;
+				recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+				bool fnd_fl=0;
+				for(usi i=0;i<n_users;i++){
+					if(strcmp((char*)(users[i].login),(char*)recv_str)==0){
+						sprintf((char*)send_str,"%s","q");
+						send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+						fnd_fl=1;
+						break;
+					}
+				}
+				if(!fnd_fl){
+					sprintf((char*)send_str,"%s","ack");
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+					users[n_users].accsfl=1; users[n_users].is_new_u=1;
+					strcpy((char*)(users[n_users].login),(char*)recv_str);
+					recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+					users[n_users].pw_hash=calc_pw_hash(recv_str); n_users++;
+				}
+			}
+			else if(strcmp((char*)recv_str,"2")==0){//block user;
+				recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str),Ks);
+				bool fnd_fl=0; 
+				for(usi i=0;i<n_users;i++){
+					if(strcmp((char*)(users[i].login),(char*)recv_str)==0){
+						users[i].accsfl=0;
+						fnd_fl=1;
+						break;
+					}
+				}
+				if(fnd_fl) strcpy((char*)send_str,"ack");
+				else strcpy((char*)send_str,"q");
+				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				cout<<"\nfnd_fl="<<fnd_fl<<" n_users="<<n_users<<" recv_str="<<recv_str;
+			}
+			else if(strcmp((char*)recv_str,"3")==0){//exit;
+				close(sock); return 0;
+			}
 		}
 	}
+	else if(strcmp((char*)recv_str,"1")==0){
+		
+	}
+	
 	
 	
 	

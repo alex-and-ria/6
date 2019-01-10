@@ -6,7 +6,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-
 #define shft_default 1
 #define dhg 2
 #define	dhp 5
@@ -113,13 +112,22 @@ int recv_c_crc(int& sock,unsigned char* c_recv_str,unsigned char* dc_recv_str,bo
 	return recv_ret;
 }
 
+unsigned char* pass_input(unsigned char* send_str){
+	for(usi j=0;j<PWSZ;j++){
+		cin>>send_str[j];
+		cout<<"\033[1A";
+		for(usi k=0;k<=j;k++) cout<<'*';
+	}
+	send_str[PWSZ]='\0';
+}
+
 int main(){
 	int sock,kdc_sock; struct sockaddr_in addr,recv_addr,kdc_addr; srand(time(NULL));
 	if(!udp_rqst(sock,addr,recv_addr)){
 		cout<<"\nudp_rqst\n"; return 1;
 	}
-	unsigned char dh_send_str[BUFFSZ],cdh_recv_str[BUFFSZ],dh_recv_str[BUFFSZ],send_str[BUFFSZ],recv_str[BUFFSZ];
-	bool crc_match=0; usi choice=0,choice1=0;
+	unsigned char dh_send_str[BUFFSZ],cdh_recv_str[BUFFSZ],dh_recv_str[BUFFSZ],send_str[BUFFSZ],recv_str[BUFFSZ],choice='0',choice1='0';
+	bool crc_match=0;
 	if((sock=socket(AF_INET,SOCK_STREAM,0))<0){
 		perror("\nsocket:"); return 1;
 	}
@@ -145,10 +153,11 @@ int main(){
 	}
 	cout<<" admin: 0; user: 1; info: 2\n";
 	//cin>>choice;
-	if(choice==0){
-		usi Ks=1;
-		//send(sock)
-		/*unsigned char auth_send_str[BUFFSZ],c_auth_recv_str[BUFFSZ],dc_auth_recv_str[BUFFSZ],tmpstr[BUFFSZ];
+	sprintf((char*)send_str,"%c",choice);
+	send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
+	if(choice=='0'){
+		/*
+		unsigned char auth_send_str[BUFFSZ],c_auth_recv_str[BUFFSZ],dc_auth_recv_str[BUFFSZ],tmpstr[BUFFSZ];
 		kdc_addr.sin_family=AF_INET;
 		kdc_addr.sin_port=htons(7701);
 		kdc_addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
@@ -173,20 +182,18 @@ int main(){
 		cout<<"\ndc_auth_recv_str="<<dc_auth_recv_str<<" auth_send_str="<<auth_send_str<<" recv_str="<<recv_str<<" fr2="<<fr2<<" r2="<<r2;
 		if(fr2==(r2+1)) cout<<"\npossibly l2s";
 		else cout<<"\nfr2";
-		close(kdc_sock);*/
+		close(kdc_sock);
+		*/
 		
+		usi Ks=1;
 		while(1){
 			cout<<"\nHello, admin; password ["<<PWSZ<<" symbols]:\n";
-			unsigned char pw_str[PWSZ+1];
 			for(usi i=0;i<3;i++){
-				for(usi j=0;j<PWSZ;j++){
-					cin>>send_str[j];
-					cout<<"\b*";
-				}
-				send_str[PWSZ]=='\0';
-				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
-				recv(sock,recv_str,sizeof(recv_str),0);
+				pass_input(send_str); cout<<"\nsend_str="<<send_str;
+				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0); cout<<"\nsend_str="<<send_str;
+				recv(sock,recv_str,sizeof(recv_str),0); cout<<"\nrecv_str="<<recv_str;
 				if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str),Ks))==0){
+					cout<<"\nack="<<recv_str;
 					break;
 				}
 				else{
@@ -195,19 +202,135 @@ int main(){
 					}
 					cout<<"\ni="<<i<<" password:\n";
 				}
-				
 			}
 			cout<<"\nch_password: 0; add_user: 1; blck_user: 2; close: 3\n";
-			//cin>>choice1;
+			cin>>choice1;
 			sprintf((char*)send_str,"%c",choice1);
-			//send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1,0);
-			
-			
+			send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+			if(choice1=='0'){//change admin's password;
+				cout<<"\ncurrent password:\n";
+				pass_input(send_str); cout<<"\n0 send_str="<<send_str;
+				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);//send current admin's password;
+				cout<<"\n0 send_str="<<send_str;
+				recv(sock,recv_str,sizeof(recv_str),0);//receive "ack";
+				cout<<"\n0 recv_str="<<recv_str;
+				if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str),Ks))==0){
+					unsigned char n_pass[PWSZ+1],c_n_pass[PWSZ+1];
+					cout<<"\nenter new password:\n";
+					pass_input(n_pass);
+					cout<<"\nconfirm:\n";
+					pass_input(c_n_pass);
+					cout<<"\nn_pass="<<n_pass<<" c_n_pass="<<c_n_pass;
+					if(strcmp((char*)n_pass,(char*)c_n_pass)==0){
+						sprintf((char*)send_str,"%c",'0');
+						send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+						sprintf((char*)send_str,"%s",n_pass);
+						send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+						cout<<"\npassword match";
+					}
+					else{
+						sprintf((char*)send_str,"%c",'1');
+						send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+						cout<<"\npassword mismatch";
+					}
+				}
+			}
+			else if(choice1=='1'){//add new user;
+				cout<<"\nn_user_login:\n"; cin>>send_str;
+				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				recv(sock,recv_str,sizeof(recv_str),0);
+				if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str),Ks))==0){
+					cout<<"\nn_user_password:\n"; cin>>send_str;
+					send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				}
+				else cout<<"\nn_user_login";
+			}
+			else if(choice1=='2'){//block user;
+				cout<<"\nu_login:\n"; cin>>send_str;
+				send(sock,cypher_str(send_str,Ks),(strlen((char*)send_str)+1),0);
+				recv(sock,recv_str,sizeof(recv_str),0);
+				if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str),Ks))==0){
+					cout<<"\nack";
+				}
+				else{
+					cout<<"\nu_login mismatch";
+				}
+			}
+			else if(choice1=='3'){//exit;
+				close(sock); return 0;
+			}
 		}
-		
-		
 	}
-	else if(choice==1){
+	else if(choice=='1'){
+		while(1){
+			cout<<"\nn_user_login:\n"; cin>>send_str;
+			send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
+			recv(sock,recv_str,sizeof(recv_str),0); decypher_str(recv_str,strlen((char*)recv_str));
+			unsigned char ack_str[4]='\0';
+			if(strlen(recv_str)>2){
+				strcpy((char*)ack_str,(char*)recv_str);
+				ack_str[3]='\0';
+			}
+			if(strcmp("ack",(char*)ack_str))==0){//login finded;
+				bool conf_fl=(recv_str[3]-'0');
+				cout<<"\nn_user_password:\n";
+				for(usi i=0;i<3;i++){
+					pass_input(send_str);
+					if(conf_fl){
+						unsigned char conf_str[PWSZ+1];
+						cout<<"\nconfirm:\n";
+						pass_input(conf_str);
+						if(strcmp((char*)send_str,(char*)conf_str)==0){//password confirmed;
+							send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
+							recv(sock,recv_str,sizeof(recv_str),0);
+							if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str))==0){
+								break;
+							}
+							else{
+								if(i==2){
+									close(sock); return 0;
+								}
+								cout<<"\ni="<<i<<" password:\n";
+							}
+						}
+						else{
+							if(i==2){
+								close(sock); return 0;
+							}
+							cout<<"\ni="<<i<<" password:\n";
+						}
+					}
+					else{
+						send(sock,cypher_str(send_str),(strlen((char*)send_str)+1),0);
+						recv(sock,recv_str,sizeof(recv_str),0);
+						if(strcmp("ack",(char*)decypher_str(recv_str,strlen((char*)recv_str))==0){
+							break;
+						}
+						else{
+							if(i==2){
+								close(sock); return 0;
+							}
+							cout<<"\ni="<<i<<" password:\n";
+						}
+					}
+				}
+			}
+			else{
+				cout<<"\nn_user_login";
+				break;
+			}
+			cout<<"\nch_password: 0; recv_q: 1; close: 3\n";
+			cin>>choice1;
+			if(choice1=='0'){//ch_password;
+			
+			}
+			else if(choice1=='1'){//recv_q;
+			
+			}
+			else{//close;
+			
+			}
+		}
 		
 	}
 	else{
